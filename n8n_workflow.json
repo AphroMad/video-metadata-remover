@@ -1,0 +1,163 @@
+{
+  "name": "Video Metadata Remover",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "remove-metadata",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "your-webhook-id"
+    },
+    {
+      "parameters": {
+        "fileName": "=/tmp/input_{{ $now.toUnixInteger() }}.mp4",
+        "dataPropertyName": "data"
+      },
+      "id": "write-input",
+      "name": "Write Input File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -i {{ $json.filePath }} -map_metadata -1 -map_chapters -1 -fflags +bitexact -flags:v +bitexact -flags:a +bitexact -c copy -y {{ $json.outputPath }}",
+        "options": {}
+      },
+      "id": "ffmpeg-process",
+      "name": "FFmpeg Process",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.outputPath }}",
+        "dataPropertyName": "data"
+      },
+      "id": "read-output",
+      "name": "Read Output File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "video/mp4"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "attachment; filename=\"processed_video.mp4\""
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "command": "=rm {{ $json.filePath }} {{ $json.outputPath }}",
+        "options": {}
+      },
+      "id": "cleanup",
+      "name": "Cleanup Files",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1050, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputPath = $input.first().json.fileName;\nconst outputPath = inputPath.replace('.mp4', '_processed.mp4');\n\nreturn {\n  json: {\n    filePath: inputPath,\n    outputPath: outputPath\n  }\n};"
+      },
+      "id": "set-paths",
+      "name": "Set File Paths",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 450]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Write Input File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Input File": {
+      "main": [
+        [
+          {
+            "node": "Set File Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set File Paths": {
+      "main": [
+        [
+          {
+            "node": "FFmpeg Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FFmpeg Process": {
+      "main": [
+        [
+          {
+            "node": "Read Output File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Output File": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Cleanup Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
